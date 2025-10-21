@@ -13,8 +13,7 @@ models on Vertex AI.  A persistent model instance is created at
 import time, and the FastAPI application uses Pydantic models to
 validate input and output.  Logging is handled through the `loguru`
 package, which sends messages to standard output as recommended by
-Google's documentation【612638540015317†L396-L408】.
-'''
+documentation.'''
 
 from __future__ import annotations
 
@@ -28,6 +27,15 @@ from pydantic import BaseModel, Field
 from PIL import Image
 import numpy as np
 from loguru import logger
+from .constants import (
+    AIP_HTTP_PORT,
+    AIP_HEALTH_ROUTE,
+    AIP_PREDICT_ROUTE,
+    YOLO_WEIGHTS_PATH,
+    OCR_LANGUAGES,
+    DEFAULT_DETECTION_CONFIDENCE,
+)
+
 
 try:
     # Import Ultralytics lazily to avoid overhead if the module is not
@@ -103,7 +111,7 @@ def _initialize_models() -> None:
         _yolo_model = None
     try:
         logger.info('Initializing EasyOCR reader for languages: {}', OCR_LANGS)
-        _ocr_reader = easyocr.Reader(OCR_LANGS, gpu=True)
+        _ocr_reader = easyocr.Reader(OCR_LANGUAGES, gpu=True)
         logger.info('EasyOCR reader initialized successfully')
     except Exception as e:
         logger.error('Failed to initialize EasyOCR reader: {}', e)
@@ -277,7 +285,7 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
     if not _models_ready:
         raise HTTPException(status_code=503, detail='Models not ready')
     params = request.parameters or {}
-    confidence: float = float(params.get('confidence', DEFAULT_CONFIDENCE))
+    confidence: float = float(params.get('confidence', DEFAULT_DETECTION_CONFIDENCE))
     run_ocr: bool = bool(params.get('run_ocr', True))
 
     predictions: List[Dict[str, Any]] = []
