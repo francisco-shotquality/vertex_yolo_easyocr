@@ -8,47 +8,38 @@ requires-python = ">=3.10,<3.13"
 
 # Core dependencies used by the inference server.
 dependencies = [
-    # Ultralytics for YOLO object detection models.  See the Ultralytics
-    # documentation for licensing details【612638540015317†L236-L254】.
+    # Ultralytics for YOLO object detection models.
     "ultralytics>=8.0.0",
-
-    # EasyOCR for lightweight optical character recognition.
+    # EasyOCR for optical character recognition.
     "easyocr>=1.6.2",
-
-    # PyTorch is installed as a dependency of Ultralytics but we declare
-    # a minimum here for clarity.
+    # PyTorch as minimum version required.
     "torch>=2.0.0",
-
-    # FastAPI and Uvicorn power the HTTP server needed by Vertex AI.  The
-    # `standard` extras install uvicorn with common performance improvements
-    # such as uvloop and httptools.
+    # FastAPI and Uvicorn for serving the HTTP API.
     "fastapi>=0.95.0",
     "uvicorn[standard]>=0.20.0",
-
-    # PIL/Pillow for image loading and manipulation【612638540015317†L305-L316】.
+    # Pillow for image loading and manipulation.
     "pillow>=9.0.0",
-
     # numpy for array manipulations.
     "numpy>=1.23.0",
-
-    # Loguru provides structured logging; used in the inference server
-    # example from Ultralytics docs【612638540015317†L396-L408】.
+    # loguru provides structured logging.
     "loguru>=0.6.0",
-
-    # Google Cloud Vertex AI SDK for endpoint invocation from the sample client.
-    "google-cloud-aiplatform>=1.44.0",
-
-    # Multipart parser used by FastAPI to accept file uploads.  Although not
-    # strictly required for JSON-based prediction requests, it allows
-    # compatibility with different client implementations.
+    # Google Cloud Vertex AI client library for invoking endpoints.
+    "google-cloud-aiplatform>=1.34.0",
+    # python-multipart for handling file uploads in FastAPI.
     "python-multipart>=0.0.6",
+    # OpenCV headless variant for image processing.
+    "opencv-python-headless>=4.6.0",
+    # python-dotenv for loading environment variables from .env files.
+    "python-dotenv>=0.21.0",
+]
 
-    # OpenCV headless variant for image processing; optional but widely used.
-    "opencv-python-headless>=4.6.0.66",
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
 ]
 
 [build-system]
-# Use setuptools to build this project.  No explicit build script is
-# necessary because this project only contains Python source files.
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
