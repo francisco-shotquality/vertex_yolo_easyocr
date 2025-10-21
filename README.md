@@ -1,198 +1,73 @@
-# Vertex AI OCR Endpoint with YOLO and EasyOCR
+# Vertex AI OCR Endpoint with YOLO and EasyOCR
 
-This repository contains a complete example of how to build and deploy a
-custom container to [Vertex AI](https://cloud.google.com/vertex-ai) that
-performs two‑stage OCR on images.  The service first detects regions
-of interest (ROIs) using a pre‑trained YOLO object detector and then
-applies EasyOCR to recognize the text inside those regions.  The
-inference server is implemented with [FastAPI](https://fastapi.tiangolo.com/) and
-supports batch prediction out of the box.  A Dockerfile is provided
-that uses an NVIDIA CUDA base image so that inference can run on
-GPUs.  Bash scripts automate downloading model weights, building and
-deploying the container to Vertex AI, and invoking the endpoint.
+This repository demonstrates how to build, deploy and invoke a custom container on Google Vertex AI for optical character recognition (OCR). The pipeline first detects regions of interest (ROIs) in input images using a pretrained YOLO object detector and then runs EasyOCR on each ROI to extract text. Running the object detector before OCR improves accuracy on cluttered images and allows the model to ignore irrelevant regions. The FastAPI application supports batch prediction and is designed to run on GPUs via an NVIDIA CUDA base image. Bash scripts automate downloading model weights, building and deploying the container, and calling the deployed Vertex AI endpoint.
 
 ## Motivation
 
-While Google’s managed services offer high‑level OCR APIs, some
-applications require a custom pipeline: object detection to crop
-interesting regions followed by text recognition.  Leveraging
-Ultralytics YOLO for detection and EasyOCR for recognition combines
-state‑of‑the‑art models while keeping the code simple.  Vertex AI’s
-custom containers allow you to package this pipeline with complete
-control over dependencies and runtime environment.  The `pyproject.toml`
-file in this repository defines the necessary dependencies and uses
-the `uv` package manager to install them efficiently【612638540015317†L236-L254】.
+Sometimes generic OCR services struggle with images that contain multiple objects or dense backgrounds. Detecting the regions that actually contain text before running OCR can significantly improve results. Using YOLO for detection and EasyOCR for text recognition allows you to assemble a custom two‑stage OCR pipeline tailored to your use case and provides full control over dependencies and runtime environment.
 
-## Project structure
+## Dependencies
 
-```
-vertex_yolo_easyocr/
-├── Dockerfile              # Custom container definition
-├── pyproject.toml          # Dependency and build configuration【612638540015317†L236-L254】
-├── README.md               # Documentation and usage instructions
-├── models/                 # Placeholder for YOLO weights (downloaded separately)
-├── scripts/
-│   ├── build_and_deploy.sh # Build, push and deploy the container to Vertex AI
-│   ├── download_weights.sh # Helper to download weights from a GCS bucket
-│   └── invoke_endpoint.py  # Example script for calling the endpoint
-└── src/
-    └── main.py             # FastAPI application (YOLO + EasyOCR)
-```
+All runtime dependencies are declared in `pyproject.toml` and installed automatically by the [uv](https://github.com/astral-sh/uv) package manager. The core libraries include:
 
-### Dependencies
+- [ultralytics](https://github.com/ultralytics/ultralytics) for YOLOv8 object detection
+- [easyocr](https://github.com/JaidedAI/EasyOCR) for text recognition
+- [fastapi](https://github.com/tiangolo/fastapi) and [uvicorn](https://github.com/encode/uvicorn) for the web server
+- [loguru](https://github.com/Delgan/loguru) for structured logging
+- `python-dotenv` for loading environment variables
 
-All Python dependencies are declared in `pyproject.toml`.  The
-[Ultralytics deployment guide](https://docs.ultralytics.com/guides/vertex-ai-deployment-with-docker/)
-recommends listing YOLO, FastAPI, Uvicorn and Pillow in your
-project’s dependency configuration【612638540015317†L236-L254】.  EasyOCR,
-PyTorch and Google’s AI Platform SDK are added here to support text
-recognition and endpoint invocation.
+## Local development and testing
 
-### Models
-
-The repository does not ship with YOLO weights.  Use the helper
-script in `scripts/download_weights.sh` to copy a weight file from a
-Google Cloud Storage bucket into the `models/` directory:
+You can build and run the inference service locally using Docker. First make sure you have downloaded the YOLO model weights (see `scripts/download_weights.sh`), then build the container image from the repository root:
 
 ```bash
-bash scripts/download_weights.sh gs://your-bucket/path/to/yolov8n.pt models/yolov8n.pt
+docker build -t vertex-yolo-easyocr .
 ```
 
-If you do not provide weights, the default value points at
-`models/yolov8n.pt` which must exist at runtime.
-
-## Local development
-
-To test the service locally, first install the dependencies into a
-virtual environment.  The `uv` command is a drop‑in replacement for
-`pip` that performs parallel installation and builds wheels in
-isolation.  Run the following commands from the root of the
-repository:
+Run the container and expose the HTTP port:
 
 ```bash
-# Create a virtual environment (optional but recommended)
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install uv and project dependencies
-pip install uv
-uv pip install -e .
-
-# Download weights if necessary
-bash scripts/download_weights.sh gs://your-bucket/path/to/yolov8n.pt models/yolov8n.pt
-
-# Run the server locally
-uvicorn src.main:app --host 0.0.0.0 --port 8080
-
-# Test health check
-curl http://localhost:8080/health
-
-# Test prediction (example with a single image encoded as base64)
-python scripts/invoke_endpoint.py \
-  --project <PROJECT> --region <REGION> --endpoint-id dummy \
-  --images path/to/your/image.jpg --confidence 0.3
+docker run --env-file .env -p 8080:8080 vertex-yolo-easyocr
 ```
 
-In local mode the `--endpoint-id` argument to `invoke_endpoint.py`
-is ignored; the script simply sends an HTTP POST to `localhost:8080`.  When
-deployed to Vertex AI the same script calls the managed endpoint via
-Google’s gRPC API.
+The service will start a FastAPI app listening on port 8080. You can send prediction requests to `http://localhost:8080/predict` using the example script in `scripts/invoke_endpoint.py` or any HTTP client. Environment variables such as the YOLO weights path and OCR languages can be set in your `.env` file and are loaded automatically by the application.
 
 ## Building and deploying to Vertex AI
 
-The repository includes a `Dockerfile` that bases the custom container
-on `nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04`.  It installs
-Python, the `uv` package manager and then uses `uv` to install the
-project in editable mode.  The container exposes port 8080 and
-configures the environment variables expected by Vertex AI.  Logging
-is directed to stdout via Loguru to satisfy Vertex AI’s requirement
-that logs be written to standard output【612638540015317†L396-L408】.
-
-To automate building, pushing and deploying the container, run the
-provided script:
+To deploy the service on Vertex AI custom containers, you must first have a Google Cloud project with Vertex AI and Artifact Registry enabled. Populate the required deployment variables (project ID, region, repository, image name, etc.) in your `.env` file. Then run the build and deploy script:
 
 ```bash
-bash scripts/build_and_deploy.sh \
-  PROJECT_ID=<your-gcp-project> \
-  REGION=us-central1 \
-  REPOSITORY=vertex-yolo-easyocr \
-  IMAGE_NAME=yolo-easyocr \
-  TAG=$(git rev-parse --short HEAD) \
-  MODEL_DISPLAY_NAME=yolo_easyocr_model \
-  ENDPOINT_DISPLAY_NAME=yolo_easyocr_endpoint
+bash scripts/build_and_deploy.sh
 ```
 
-This script performs the following actions:
+This script:
 
-1. **Ensure the Artifact Registry repository exists.**  It creates
-   the specified Docker repository if necessary.
-2. **Build the Docker image.**  The image is tagged with the fully
-   qualified registry URI.
-3. **Authenticate Docker and push the image.**  It calls
-   `gcloud auth configure-docker` and pushes the image to Artifact
-   Registry.
-4. **Upload the model to Vertex AI.**  The model is registered with
-   the container image URI and the health/predict routes.
-5. **Create an endpoint if needed.**  If an endpoint with the given
-   display name does not exist, it creates one.
-6. **Deploy the model to the endpoint.**  The script attaches the
-   latest model version to the endpoint, requesting a machine type and
-   GPU accelerator (default: one T4 GPU).  You can modify
-   `MACHINE_TYPE`, `ACCELERATOR_TYPE` and `ACCELERATOR_COUNT` in the
-   script to match your requirements.
+1. Builds the Docker image and pushes it to your Artifact Registry repository
+2. Creates or updates a model in Vertex AI pointing to the container image
+3. Deploys the model to an endpoint in Vertex AI with GPU support
 
-After deployment completes, the endpoint will be ready to receive
-prediction requests.
+The script uses environment variables defined in `.env` to parameterize the deployment. See the comments inside `scripts/build_and_deploy.sh` for details.
 
 ## Invoking the endpoint
 
-Use `scripts/invoke_endpoint.py` to send images to your deployed
-endpoint.  The script accepts a list of image paths and optional
-parameters such as a confidence threshold and a flag to skip OCR.  You
-must authenticate with Google Cloud (e.g., via `gcloud auth
-application-default login`) before calling the endpoint.
-
-Example:
+After deployment, you can invoke the Vertex AI endpoint programmatically. The example script `scripts/invoke_endpoint.py` takes the endpoint ID, image file, and project information and sends a prediction request:
 
 ```bash
 python scripts/invoke_endpoint.py \
-  --project <PROJECT_ID> \
-  --region us-central1 \
-  --endpoint-name yolo_easyocr_endpoint \
-  --images image1.jpg image2.jpg \
-  --confidence 0.4
+  --project_id your-project-id \
+  --endpoint_id your-endpoint-id \
+  --region your-region \
+  --image_path path/to/your/image.jpg
 ```
 
-The script will print the JSON response returned by Vertex AI.  Each
-prediction contains an array of detections with bounding boxes, class
-names, detection confidence and the OCR results for each region.
+The script encodes the image, calls the endpoint via the Vertex AI Python SDK and prints the detection results.
 
 ## Notes and best practices
 
-* **Batch prediction:**  The prediction endpoint accepts a list of
-  instances, allowing you to process multiple images in a single
-  request.  Vertex AI charges per prediction call and per node hour,
-  so batching can reduce overhead.
-* **Model weights:**  The choice of YOLO weights affects both the
-  speed and accuracy of ROI detection.  Lightweight models like
-  `yolov8n.pt` are fast but less accurate, whereas larger models
-  (e.g., `yolov8x.pt`) may require more GPU memory.  The provided
-  download script makes it easy to swap weights.
-* **OCR languages:**  Set the `OCR_LANGS` environment variable to a
-  comma‑separated list of language codes (e.g., `en,es,pt`) to have
-  EasyOCR recognize multiple languages.  Only the necessary models
-  will be loaded.
-* **Error handling:**  The server returns HTTP 503 if the models have
-  not finished loading.  During inference, exceptions are logged and
-  a best‑effort response is returned.  Customize the error handling
-  logic in `src/main.py` as needed.
+- Use GPU-enabled machine types (e.g., `n1-standard-8` with an attached NVIDIA T4 or A100) when deploying the endpoint for best performance.
+- Place your YOLO weights file in the `models` directory or configure an alternate path in your `.env` file.
+- For large batches of images, adjust the request payload size and concurrency settings in the `predict` endpoint accordingly.
 
 ## License and attribution
 
-This project includes third‑party dependencies.  Ultralytics YOLO
-models are licensed under AGPL‑3.0, which imposes sharing
-requirements when you deploy modified versions of the model【612638540015317†L232-L234】.
-Review the Ultralytics documentation and consult your legal team if
-unsure.  EasyOCR is licensed under the Apache 2.0 license.  All code
-in this repository is provided under the MIT License unless noted
-otherwise.
+The YOLOv8 model from Ultralytics is licensed under the GNU Affero General Public License v3.0 (AGPL‑3.0). Please ensure that your use complies with the terms of this license. EasyOCR is licensed under the Apache License 2.0. See the respective repositories for full licensing details.
