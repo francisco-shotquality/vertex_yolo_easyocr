@@ -1,0 +1,54 @@
+[project]
+name = "vertex_yolo_easyocr"
+version = "0.1.0"
+description = "Vertex AI custom container that performs ROI detection using YOLO and text recognition with EasyOCR."
+authors = ["Your Name <you@example.com>"]
+
+requires-python = ">=3.10,<3.13"
+
+# Core dependencies used by the inference server.
+dependencies = [
+    # Ultralytics for YOLO object detection models.  See the Ultralytics
+    # documentation for licensing details【612638540015317†L236-L254】.
+    "ultralytics>=8.0.0",
+
+    # EasyOCR for lightweight optical character recognition.
+    "easyocr>=1.6.2",
+
+    # PyTorch is installed as a dependency of Ultralytics but we declare
+    # a minimum here for clarity.
+    "torch>=2.0.0",
+
+    # FastAPI and Uvicorn power the HTTP server needed by Vertex AI.  The
+    # `standard` extras install uvicorn with common performance improvements
+    # such as uvloop and httptools.
+    "fastapi>=0.95.0",
+    "uvicorn[standard]>=0.20.0",
+
+    # PIL/Pillow for image loading and manipulation【612638540015317†L305-L316】.
+    "pillow>=9.0.0",
+
+    # numpy for array manipulations.
+    "numpy>=1.23.0",
+
+    # Loguru provides structured logging; used in the inference server
+    # example from Ultralytics docs【612638540015317†L396-L408】.
+    "loguru>=0.6.0",
+
+    # Google Cloud Vertex AI SDK for endpoint invocation from the sample client.
+    "google-cloud-aiplatform>=1.44.0",
+
+    # Multipart parser used by FastAPI to accept file uploads.  Although not
+    # strictly required for JSON-based prediction requests, it allows
+    # compatibility with different client implementations.
+    "python-multipart>=0.0.6",
+
+    # OpenCV headless variant for image processing; optional but widely used.
+    "opencv-python-headless>=4.6.0.66",
+]
+
+[build-system]
+# Use setuptools to build this project.  No explicit build script is
+# necessary because this project only contains Python source files.
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
